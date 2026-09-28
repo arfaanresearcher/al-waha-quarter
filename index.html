@@ -193,6 +193,15 @@ footer button{background:none;border:0;color:var(--accent);font-weight:700;paddi
 .timer{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--ink);color:var(--bg);border-radius:12px;padding:10px 16px;margin-bottom:16px;font-weight:700}
 .timer .num{font-size:22px}
 .timer.over{background:var(--bad);color:#fff}
+.brief{border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:14px 16px}
+.brieflist{margin:8px 0 0;padding-left:20px;display:grid;gap:6px}
+.livepill{font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--surface-2);color:var(--ink-2)}
+.livepill.live{background:var(--good);color:#fff}
+.livepill.live::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#fff;margin-right:6px;vertical-align:1px}
+.lbbar{display:inline-block;width:90px;height:8px;border-radius:4px;background:var(--surface-2);overflow:hidden;margin-right:8px;vertical-align:middle}
+.lbbar i{display:block;height:100%;background:var(--accent)}
+table.lb tr.top1 td{background:var(--accent-soft)}
+summary{cursor:pointer}
 .codebox{display:flex;justify-content:space-between;align-items:center;gap:12px;border:2px dashed var(--accent);border-radius:12px;padding:12px 14px}
 .codebox .num{font-size:26px;letter-spacing:.06em}
 .setup{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:20px;align-items:start}
@@ -256,6 +265,7 @@ const STATIC = !(window.claude && typeof window.claude.use==="function");
 const enc = o=>{const b=btoa(unescape(encodeURIComponent(JSON.stringify(o))));return b.replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");};
 const dec = s=>JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g,"+").replace(/_/g,"/")))));
 const valid = c=>c&&Array.isArray(c.teams)&&c.teams.length>=1&&c.teams.every(t=>t&&typeof t.name==="string"&&LENSES[t.lens]);
+function genRoom(){ const a=new Uint32Array(3); try{crypto.getRandomValues(a);}catch(e){for(let i=0;i<3;i++)a[i]=Math.random()*4294967295;} return "alwaha-"+[...a].map(x=>x.toString(36)).join("").slice(0,14); }
 function readCfg(){
   const base = ()=>{ try{ const c=JSON.parse(document.getElementById("cfg").textContent); if(valid(c)) return Object.assign({},DEFAULT_CFG,c); }catch(e){} return JSON.parse(JSON.stringify(DEFAULT_CFG)); };
   let c = base();
@@ -264,14 +274,15 @@ function readCfg(){
     try{ const q=new URLSearchParams(location.search).get("s"); if(q){ const u=dec(q); if(valid(u)) return Object.assign({},c,u,{fromLink:true}); } }catch(e){}
     try{ const l=JSON.parse(localStorage.getItem("alwaha.cfg")||"null"); if(valid(l)) c=Object.assign({},c,l); }catch(e){}
     if(!c.shareUrl || /claude\.ai/.test(c.shareUrl)) c.shareUrl = location.origin + location.pathname;
+    if(!c.room){ c.room=genRoom(); try{ const keep=Object.assign({},c); delete keep.fromLink; localStorage.setItem("alwaha.cfg",JSON.stringify(keep)); }catch(e){} }
   }
   return c;
 }
 // the link students open: on a plain website it carries the setup; inside claude.ai the page itself carries it
 function joinUrl(cfg){
   if(!STATIC) return cfg.shareUrl;
-  const {teams,budget,target,timerMin,endsAt}=cfg;
-  return (cfg.shareUrl||location.origin+location.pathname).split("?")[0].split("#")[0] + "?s=" + enc({teams,budget,target,timerMin,endsAt});
+  const {teams,budget,target,timerMin,endsAt,room}=cfg;
+  return (cfg.shareUrl||location.origin+location.pathname).split("?")[0].split("#")[0] + "?s=" + enc({teams,budget,target,timerMin,endsAt,room});
 }
 
 // ---------------- data ----------------
@@ -441,6 +452,7 @@ function switchView(to){
 function render(){
   steps(); footer(); tickTimer();
   app=document.getElementById("app");
+  if(STATIC && (view==="board"||view==="student")) relayConnect();
   if(view==="board") return renderBoard();
   if(view==="setup") return renderSetup();
   if(view==="qr") return renderQR();
@@ -455,11 +467,21 @@ function renderJoin(){
   const inTest=view==="test";
   app.innerHTML=`
   <section class="join">
-    <div class="intro">
-      <p class="eyebrow">Case activity</p>
-      <h1>The operator wants a data-driven plan to cut summer energy use by ${CFG.target}%.</h1>
-      <p class="lede">Explore Al Waha Quarter's smart-meter data, agree what the real problem is, then choose what to spend a AED ${CFG.budget} million budget on.</p>
-      <p class="fine">Everyone can explore on their own phone. Each team's scribe submits the team's answer and reads it out at report-back.</p>
+    <div class="intro stack">
+      <p class="eyebrow">The challenge · Interdisciplinary Elective, Session 1</p>
+      <h1>Cut Al Waha Quarter's summer energy use by ${CFG.target}%, without leaving anyone behind.</h1>
+      <p class="lede">Al Waha Quarter is a neighbourhood of about 5,800 people on the edge of a Gulf city: villas, townhouses, mid-rise apartments, six blocks of shared worker accommodation, and a mall, school and clinic. In July and August, cooling accounts for 58–79% of its electricity.</p>
+      <p>The operator installed smart meters in 2025. Now its board wants <b>a data-driven plan to cut summer energy use by ${CFG.target}% within 12 months</b>, with a budget of <b>AED ${CFG.budget} million</b>.</p>
+      <div class="brief">
+        <p class="eyebrow">Your team's job</p>
+        <ol class="brieflist">
+          <li><b>Explore</b> the smart-meter data on a map of the quarter.</li>
+          <li><b>Agree the real problem</b>, seen through the discipline on your team's lens card: planner, economist, lawyer, resident advocate or engineer.</li>
+          <li><b>Spend the budget</b> on the interventions you think are right.</li>
+          <li><b>Report back</b> in 2 minutes. Your scribe reads out your problem and plan.</li>
+        </ol>
+      </div>
+      <p class="fine">Everyone explores on their own phone; one scribe per team submits. Some measures stay hidden until the debrief, so don't expect to see the whole picture. The neighbourhood and all its figures are invented for teaching.</p>
     </div>
     <form class="panel stack" id="joinform" novalidate>
       <label class="f" for="nm">Your name <input type="text" id="nm" maxlength="40" autocomplete="given-name" value="${esc(S.name)}" placeholder="First name is fine"></label>
@@ -674,9 +696,11 @@ function renderReport(){
       :`
         <p class="eyebrow">Submitted</p>
         <h2>Get ready to read this out.</h2>
+        ${useRelay()?`<p class="small muted">${relayState==="live"?"Your team's answer is on the facilitator's board.":"Connecting to the facilitator's board…"}</p>`:""}
         <p>Read your problem statement and plan to the class, then give your facilitator the board code. Four measures are still hidden until the debrief.</p>`}
     </div>
   </section>`;
+  if(showLB && useRelay()){ const lbp=document.createElement("div"); lbp.className="panel"; lbp.style.marginTop="20px"; lbp.innerHTML=`<p class="eyebrow">Leaderboard · balance across all five lenses</p><h2 style="margin:2px 0 12px">How every team's plan scores</h2>${leaderboardHTML(teamRows())}`; app.appendChild(lbp); }
   document.getElementById("edit").onclick=()=>{S.submitted=false;go("intervene");};
   document.getElementById("editp").onclick=()=>{S.submitted=false;go("explore");};
 }
@@ -717,6 +741,66 @@ const DEMO=[
   {problem:"The people with the worst heat and the least say are in Zone D, and nobody asked them.",missing:"Indoor temperatures in Zone D",plan:["retrofit","control","data"],submitted:true},
   {problem:"Everyone's AC peaks at the same time in the afternoon, and the grid has no headroom.",missing:"Hour-by-hour load by building",plan:["dr","tou","solar","nudge"],submitted:true}
 ];
+// ---------------- live relay (public website only) ----------------
+// Phones publish small JSON updates to a public ntfy.sh topic named by the class code; the board and phones subscribe to it.
+const RELAY="https://ntfy.sh/";
+let relayES=null, relayState="off", showLB=false, ctlAt=0, relayTimer=null, lastSent="", lastStage=null, refreshTimer=null;
+const people=new Map(); // device id -> latest state
+const DEV=(()=>{try{let d=localStorage.getItem("alwaha.dev");if(!d){d=Math.random().toString(36).slice(2,10);localStorage.setItem("alwaha.dev",d);}return d;}catch(e){return Math.random().toString(36).slice(2,10);}})();
+const useRelay=()=>STATIC && !!CFG.room && view!=="test";
+function relayPost(o){ if(!useRelay()) return; try{ fetch(RELAY+encodeURIComponent(CFG.room),{method:"POST",body:JSON.stringify(o)}).catch(()=>{}); }catch(e){} }
+function studentMsg(){ return {k:"s",d:DEV,n:(S.name||"").slice(0,40),tm:S.team,sc:!!S.scribe,st:S.stage,p:(S.problem||"").slice(0,280),m:(S.missing||"").slice(0,160),pl:S.plan.slice(0,12),sb:!!S.submitted}; }
+function relaySendState(){
+  if(!useRelay()||view!=="student"||S.stage==="join"||S.team==null) return;
+  const now = S.stage!==lastStage; lastStage=S.stage;
+  const send=()=>{ const o=studentMsg(), j=JSON.stringify(o); if(j===lastSent) return; lastSent=j; relayPost(Object.assign(o,{at:Date.now()})); };
+  clearTimeout(relayTimer); if(now) send(); else relayTimer=setTimeout(send,3000);
+}
+function broadcastControl(){ if(STATIC) relayPost({k:"c",rev:!!revealed,lb:!!showLB,at:Date.now()}); broadcastReveal(); }
+function handleRelay(m){
+  if(!m||typeof m!=="object") return;
+  if(m.k==="s" && typeof m.d==="string" && Number.isInteger(m.tm) && CFG.teams[m.tm]){
+    const prev=people.get(m.d); const at=+m.at||0; if(prev&&prev.at>at) return;
+    people.set(m.d,{name:String(m.n||"").slice(0,40),team:m.tm,scribe:!!m.sc,stage:["explore","intervene","report"].includes(m.st)?m.st:"explore",problem:String(m.p||"").slice(0,280),missing:String(m.m||"").slice(0,160),plan:Array.isArray(m.pl)?m.pl.filter(id=>IBY[id]).slice(0,12):[],submitted:!!m.sb,at});
+  } else if(m.k==="c" && (+m.at||0)>ctlAt){ ctlAt=+m.at; revealed=!!m.rev; showLB=!!m.lb; }
+  clearTimeout(refreshTimer); refreshTimer=setTimeout(()=>{ if(view==="board") renderBoard(); else if(view==="student"&&S.stage==="report") renderReport(); },250);
+}
+function relayConnect(){
+  if(!useRelay()||relayES||typeof EventSource!=="function") return;
+  relayState="connecting";
+  try{ relayES=new EventSource(RELAY+encodeURIComponent(CFG.room)+"/sse?since=12h"); }catch(e){ relayES=null; relayState="off"; return; }
+  relayES.onopen=()=>{ relayState="live"; if(view==="board") renderBoard(); };
+  relayES.onerror=()=>{ relayState="retrying"; };
+  relayES.onmessage=e=>{ try{ const d=JSON.parse(e.data); if(d&&d.event==="message"&&typeof d.message==="string") handleRelay(JSON.parse(d.message)); }catch(err){} };
+}
+function relayTeamState(i){
+  let best=null; for(const v of people.values()) if(v.team===i&&v.scribe&&(!best||v.at>best.at)) best=v;
+  return best;
+}
+function balance(ids){ const M=measures(ids); const rs=LK.map(k=>M[k].r); return {score:Math.round(rs.reduce((a,b)=>a+b,0)/rs.length/4*100), weakest:LK[rs.indexOf(Math.min(...rs))]}; }
+function leaderboardHTML(rows){
+  const ranked=rows.filter(r=>r.p&&(r.p.plan||[]).length).map(r=>{const b=balance(r.p.plan),t=totals(r.p.plan);return {r,b,t,pct:pctSaved(t)};})
+    .sort((a,b)=>b.b.score-a.b.score||b.pct-a.pct);
+  if(!ranked.length) return `<p class="muted">No plans yet. Teams appear here once they choose interventions.</p>`;
+  return `<div class="scroll"><table class="mx lb"><thead><tr><th>#</th><th>Team</th><th>Balance score</th><th>Energy saved</th><th>Cost</th><th>Weakest lens</th></tr></thead><tbody>
+  ${ranked.map((x,i)=>`<tr${i===0?' class="top1"':""}><td class="num"><b>${i+1}</b></td><td><b>${esc(x.r.t.name)}</b></td>
+    <td><div class="lbbar"><i style="width:${x.b.score}%"></i></div><span class="num">${x.b.score}</span></td>
+    <td class="num">${x.pct.toFixed(1)}%${x.pct>=CFG.target?" ✓":""}</td><td class="num">AED ${x.t.cost.toFixed(1)}m</td><td>${esc(LENSES[x.b.weakest].measure)}</td></tr>`).join("")}
+  </tbody></table></div><p class="small muted" style="margin-top:8px">Balance score = the average of a plan's five lens ratings (Poor 0 to Strong 100). A plan that works for every discipline beats one that wins big on a single lens.</p>`;
+}
+const STAGE_LABEL={explore:"Exploring",intervene:"Choosing",report:"Submitted"};
+function ago(t){ const s=Math.max(0,Math.round((Date.now()-t)/1000)); return s<60?"just now":s<3600?Math.round(s/60)+" min ago":Math.round(s/3600)+" h ago"; }
+function rosterHTML(){
+  const list=[...people.values()].sort((a,b)=>a.team-b.team||(b.scribe-a.scribe)||a.name.localeCompare(b.name));
+  const teamsIn=new Set(list.map(p=>p.team)).size, submitted=CFG.teams.filter((t,i)=>{const s=relayTeamState(i);return s&&s.submitted;}).length;
+  return `<div class="panel" style="margin-bottom:14px"><div class="row" style="justify-content:space-between"><div><p class="eyebrow">Class activity</p><h2 style="margin-top:2px">${list.length} student${list.length===1?"":"s"} in · ${teamsIn} of ${CFG.teams.length} teams · ${submitted} submitted</h2></div>
+    <span class="livepill ${relayState}">${relayState==="live"?"Live":relayState==="connecting"?"Connecting…":relayState==="retrying"?"Reconnecting…":"Off"}</span></div>
+    ${list.length?`<details style="margin-top:10px" ${list.length<=12?"open":""}><summary class="small"><b>Who's in</b></summary><div class="scroll"><table class="mx" style="margin-top:6px"><thead><tr><th>Name</th><th>Team</th><th>Role</th><th>Stage</th><th>Last update</th></tr></thead><tbody>
+      ${list.map(p=>`<tr><td>${esc(p.name||"—")}</td><td>${esc(CFG.teams[p.team].name)}</td><td>${p.scribe?"Scribe":"Following"}</td><td>${STAGE_LABEL[p.stage]||"—"}</td><td class="small muted">${ago(p.at)}</td></tr>`).join("")}
+    </tbody></table></div></details>`:`<p class="muted" style="margin-top:8px">Nobody has joined yet. Students appear here as soon as they join from the class QR code.</p>`}
+  </div>`;
+}
+
 function teamRows(){
   // one row per configured team; live answers win over typed codes
   return CFG.teams.map((t,i)=>{
@@ -724,6 +808,7 @@ function teamRows(){
     if(demo){ const d=DEMO[i%DEMO.length]; p=Object.assign({team:i},d); src="demo"; online=true; }
     else {
       for(const v of seen.values()) if(v.p.team===i){ p=v.p; src="live"; online=v.online; }
+      if(!p){ const r=relayTeamState(i); if(r){ p={team:i,name:r.name,problem:r.problem,missing:r.missing,plan:r.plan,submitted:r.submitted}; src="relay"; online=true; } }
       if(!p && manual[i]){ p=Object.assign({team:i,submitted:true},manual[i]); src="code"; }
     }
     return {i,t,p,src,online};
@@ -740,13 +825,14 @@ function renderBoard(){
       <div class="toggle"><button class="switch" type="button" role="switch" aria-checked="${revealed}" id="rev" aria-labelledby="revl"></button><span id="revl">Reveal lenses</span></div>
     </div>
     ${view==="test"?`<div class="banner"><b>Test mode.</b> Play a team on the phone, switch teams with the buttons above, and watch this board fill. Nothing is sent to students.</div>`
+      :useRelay()?rosterHTML()
       :`<div class="banner">Teams on a public link can't send answers here. When a scribe reads out their board code, type it below; signed-in teams appear automatically.</div>`}
-    ${view!=="test"?`<form class="panel addcode" id="codeform" novalidate style="margin-bottom:14px">
+    ${view!=="test"?`<details class="panel" style="margin-bottom:14px" ${useRelay()?"":"open"}><summary class="small"><b>Add a team by board code</b> <span class="muted">${useRelay()?"(backup if a phone can't connect)":""}</span></summary><form class="addcode" id="codeform" novalidate style="margin-top:10px">
       <label class="f" for="bc">Board code <input type="text" id="bc" maxlength="8" placeholder="e.g. 3-7F" autocomplete="off" autocapitalize="characters"></label>
       <label class="f grow" for="bp">Their problem, in a few words <span class="hint">Optional</span><input type="text" id="bp" maxlength="200" placeholder="What the scribe read out"></label>
       <button class="btn" type="submit">Add</button>
       <p class="err" id="bcerr" style="flex-basis:100%;margin:0"></p>
-    </form>`:""}
+    </form></details>`:""}
     <div class="bgrid">${rows.map(r=>{const p=r.p;const L=LENSES[r.t.lens];
       if(!p) return `<article class="gcard gone"><div class="gname"><h3>${esc(r.t.name)}</h3>${revealed?`<span class="lenstag">${esc(L.name)}</span>`:`<span class="lenstag hidden">Lens hidden</span>`}</div><p class="state">Waiting for this team</p></article>`;
       const t=totals(p.plan||[]);
@@ -758,6 +844,9 @@ function renderBoard(){
         <p class="state num">${r.src==="code"?"From board code":r.src==="demo"?"Example":p.submitted?"Plan submitted":"Working"} · AED ${t.cost.toFixed(1)}m · saves ${pctSaved(t).toFixed(1)}%${p.name?" · scribe "+esc(p.name):""}</p>
         ${r.src==="code"?`<button type="button" class="btn quiet" data-del="${r.i}" style="min-height:36px;padding:6px 12px;align-self:start">Remove</button>`:""}
       </article>`;}).join("")}</div>
+    <div class="panel" style="margin-top:18px"><div class="row" style="justify-content:space-between;align-items:start"><div><p class="eyebrow">Leaderboard · ranked by balance across all five lenses</p><h2 style="margin-top:2px">Which plan works for everyone?</h2></div>
+      ${view!=="test"&&STATIC?`<div class="toggle"><button class="switch" type="button" role="switch" aria-checked="${showLB}" id="lbt" aria-labelledby="lbl"></button><span id="lbl">Show on students' phones</span></div>`:""}</div>
+      <div style="margin-top:12px">${leaderboardHTML(rows)}</div></div>
     ${revealed&&done.length?`<div class="panel" style="margin-top:18px"><p class="eyebrow">Debrief</p><h2 style="margin:4px 0 6px">Each plan wins on its own lens and loses somewhere else.</h2><p class="muted small" style="margin-bottom:10px">Outlined cell = that team's own lens.</p>${matrix(done.map(r=>({name:r.t.name,lens:r.t.lens,ids:r.p.plan||[]})),{first:"Team",showLens:true})}</div>`:""}
     <div class="row" style="margin-top:18px">
       <button class="btn quiet" type="button" id="demo">${demo?"Hide example answers":"Load example answers"}</button>
@@ -767,7 +856,8 @@ function renderBoard(){
       <span class="small muted" id="copymsg" role="status"></span>
     </div>
   </section>`;
-  root.querySelector("#rev").onclick=()=>{revealed=!revealed; if(view==="test"){ if(S.stage==="report") renderReport(); } else broadcastReveal(); renderBoard();};
+  root.querySelector("#rev").onclick=()=>{revealed=!revealed; if(view==="test"){ if(S.stage==="report") renderReport(); } else broadcastControl(); renderBoard();};
+  const lbt=root.querySelector("#lbt"); if(lbt) lbt.onclick=()=>{showLB=!showLB; broadcastControl(); renderBoard();};
   root.querySelector("#demo").onclick=()=>{demo=!demo;renderBoard();};
   root.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{delete manual[b.dataset.del];saveManual();renderBoard();});
   const cf=root.querySelector("#codeform");
@@ -809,7 +899,7 @@ function renderQR(){
 }
 
 // ---------------- setup (admin) ----------------
-let draft=null, setupMsg={text:"",cls:""}, publishing=false;
+let draft=null, setupMsg={text:"",cls:""}, publishing=false, newCodeConfirm=false;
 function renderSetup(){
   if(!draft) draft=JSON.parse(JSON.stringify(CFG));
   const used=new Set(draft.teams.map(t=>t.lens)), missing=LK.filter(k=>!used.has(k));
@@ -858,6 +948,12 @@ function renderSetup(){
           <input type="text" id="su" value="${esc(draft.shareUrl)}" spellcheck="false"></label>
         <button class="btn ghost" type="button" id="toqr">Project the QR full screen</button>
       </div>
+      ${STATIC?`<div class="panel stack">
+        <h3>Class code</h3>
+        <p class="small">Answers travel to your board under this code: <span class="mono">${esc(CFG.room||"")}</span>. It's built into the QR code.</p>
+        ${newCodeConfirm?`<div class="confirm"><span class="small">Start a fresh class? Answers sent under the old code stop showing on your board.</span><button class="btn" type="button" id="ncyes">Yes, new code</button><button class="btn ghost" type="button" id="ncno">Cancel</button></div>`
+          :`<button class="btn quiet" type="button" id="newcode">New class code for a new group</button>`}
+      </div>`:""}
     </div>
   </section>`;
   const $=id=>document.getElementById(id);
@@ -874,6 +970,9 @@ function renderSetup(){
   $("tstart").onclick=()=>saveCfg(Object.assign({},CFG,{timerMin:draft.timerMin,endsAt:Date.now()+draft.timerMin*60000}),"Timer started.");
   const ts=$("tstop"); if(ts) ts.onclick=()=>saveCfg(Object.assign({},CFG,{endsAt:null}),"Timer cleared.");
   $("toqr").onclick=()=>switchView("qr");
+  const nc=$("newcode"); if(nc) nc.onclick=()=>{newCodeConfirm=true;renderSetup();};
+  const ncn=$("ncno"); if(ncn) ncn.onclick=()=>{newCodeConfirm=false;renderSetup();};
+  const ncy=$("ncyes"); if(ncy) ncy.onclick=()=>{newCodeConfirm=false; if(relayES){relayES.close();relayES=null;} people.clear(); revealed=false; showLB=false; ctlAt=0; saveCfg(Object.assign({},CFG,{room:genRoom()}),"New class code created.");};
 }
 function refreshSave(){
   const b=document.getElementById("savecfg"); if(!b) return;
@@ -914,6 +1013,7 @@ let pubTimer=null;
 function publishSoon(){clearTimeout(pubTimer);pubTimer=setTimeout(publish,400);}
 function publish(){
   if(view==="test"){ syncTest(); return; }
+  if(STATIC){ relayConnect(); relaySendState(); }
   if(!room) return;
   let p;
   if(view!=="student") p={role:"board"};
